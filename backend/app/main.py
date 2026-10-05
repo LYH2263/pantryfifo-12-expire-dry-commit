@@ -5,7 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app import seed
 from app.db import connect
-from app.engines.fefo import consume_fefo, expire_lots
+from app.engines.fefo import consume_fefo
+from app.engines import sweep
 
 app = FastAPI(title="Pantryfifo", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -90,14 +91,23 @@ def consume(body: ConsumeIn):
               (body.note, json.dumps(result), datetime.now(timezone.utc).isoformat()))
     c.commit(); c.close(); return result
 
+@app.get("/api/expire-sweep")
+def expire_sweep_preview():
+    """干跑：列出到期日早于今天且仍在架的批号，不写库。"""
+    return sweep.dry_run()
+
+class SweepCommitIn(BaseModel):
+    preview_ids: list[int] = []
+
 @app.post("/api/expire-sweep")
-def expire_sweep():
-    c = connect()
-    lots = [dict(r) for r in c.execute("SELECT * FROM lots WHERE status='on_shelf'")]
-    ids = expire_lots(lots, date.today().isoformat())
-    for i in ids:
-        c.execute("UPDATE lots SET status='expired' WHERE id=?", (i,))
-    c.commit(); c.close(); return {"expired_ids": ids}
+def expire_sweep_commit(body: SweepCommitIn | None = None):
+    """提交：单事务内按提交瞬间重算并落 expired，整体成功或整体回滚。"""
+    preview_ids = body.preview_ids if body else []
+    try:
+        return sweep.commit(preview_ids)
+    except Exception:
+        # 中途失败：事务已回滚，全层/层页/顶条保持提交前；对外报 500。
+        raise HTTPException(500, "expire sweep commit failed")
 
 @app.get("/api/settings")
 def settings():

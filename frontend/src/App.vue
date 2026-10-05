@@ -17,8 +17,15 @@
   </div>
 </template>
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { api } from './api'
 const alerts = ref([])
-onMounted(async () => { try { alerts.value = await api('/alerts') } catch { alerts.value = [] } })
+async function loadAlerts() { try { alerts.value = await api('/alerts') } catch { alerts.value = [] } }
+// 全层提交过期下架后通知顶条同刷，避免顶条与全层落在不同世代
+function onAlertsRefresh() { loadAlerts() }
+onMounted(() => {
+  loadAlerts()
+  window.addEventListener('alerts:refresh', onAlertsRefresh)
+})
+onUnmounted(() => window.removeEventListener('alerts:refresh', onAlertsRefresh))
 </script>
