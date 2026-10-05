@@ -18,6 +18,7 @@ onMounted(async () => { items.value = await api('/items'); if (items.value[0]) i
 async function go() {
   try {
     result.value = JSON.stringify(await api('/consume', { method: 'POST', body: JSON.stringify({ item_id: item_id.value, qty: qty.value }) }), null, 2)
+    window.dispatchEvent(new CustomEvent('pantry:generation'))
   } catch (e) { result.value = e.message }
 }
 </script>

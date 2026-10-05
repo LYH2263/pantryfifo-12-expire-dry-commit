@@ -17,8 +17,15 @@
   </div>
 </template>
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { api } from './api'
 const alerts = ref([])
-onMounted(async () => { try { alerts.value = await api('/alerts') } catch { alerts.value = [] } })
+async function loadAlerts() { try { alerts.value = await api('/alerts') } catch { alerts.value = [] } }
+// full-layer commits the sweep; the alert bar must jump to the same generation
+function onGeneration() { loadAlerts() }
+onMounted(async () => {
+  await loadAlerts()
+  window.addEventListener('pantry:generation', onGeneration)
+})
+onBeforeUnmount(() => window.removeEventListener('pantry:generation', onGeneration))
 </script>
